@@ -1,0 +1,41 @@
+#!/bin/bash
+
+python save_closest_member_histogram_dress_to_netcdf.py 01 024 
+python save_closest_member_histogram_dress_to_netcdf.py 02 024 
+python save_closest_member_histogram_dress_to_netcdf.py 03 024 
+python save_closest_member_histogram_dress_to_netcdf.py 04 024 
+python save_closest_member_histogram_dress_to_netcdf.py 05 024 
+python save_closest_member_histogram_dress_to_netcdf.py 06 024 
+python save_closest_member_histogram_dress_to_netcdf.py 07 024 
+python save_closest_member_histogram_dress_to_netcdf.py 08 024 
+python save_closest_member_histogram_dress_to_netcdf.py 09 024 
+python save_closest_member_histogram_dress_to_netcdf.py 10 024 
+python save_closest_member_histogram_dress_to_netcdf.py 11 024 
+python save_closest_member_histogram_dress_to_netcdf.py 12 024 
+
+python save_closest_member_histogram_dress_to_netcdf.py 01 072 
+python save_closest_member_histogram_dress_to_netcdf.py 02 072 
+python save_closest_member_histogram_dress_to_netcdf.py 03 072 
+python save_closest_member_histogram_dress_to_netcdf.py 04 072 
+python save_closest_member_histogram_dress_to_netcdf.py 05 072 
+python save_closest_member_histogram_dress_to_netcdf.py 06 072 
+python save_closest_member_histogram_dress_to_netcdf.py 07 072 
+python save_closest_member_histogram_dress_to_netcdf.py 08 072 
+python save_closest_member_histogram_dress_to_netcdf.py 09 072 
+python save_closest_member_histogram_dress_to_netcdf.py 10 072 
+python save_closest_member_histogram_dress_to_netcdf.py 11 072 
+python save_closest_member_histogram_dress_to_netcdf.py 12 072 
+
+python save_closest_member_histogram_dress_to_netcdf.py 01 120 
+python save_closest_member_histogram_dress_to_netcdf.py 02 120 
+python save_closest_member_histogram_dress_to_netcdf.py 03 120 
+python save_closest_member_histogram_dress_to_netcdf.py 04 120 
+python save_closest_member_histogram_dress_to_netcdf.py 05 120 
+python save_closest_member_histogram_dress_to_netcdf.py 06 120 
+python save_closest_member_histogram_dress_to_netcdf.py 07 120 
+python save_closest_member_histogram_dress_to_netcdf.py 08 120 
+python save_closest_member_histogram_dress_to_netcdf.py 09 120 
+python save_closest_member_histogram_dress_to_netcdf.py 10 120 
+python save_closest_member_histogram_dress_to_netcdf.py 11 120 
+python save_closest_member_histogram_dress_to_netcdf.py 12 120 
+

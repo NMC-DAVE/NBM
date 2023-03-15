@@ -1,0 +1,269 @@
+"""
+
+mswep_to_ndfd_grid_2020_and_beyond.py 
+
+Jan 2020, sum to 6-hourly and interpolate
+MSWEP to CONUS grid and save to a new netCDF file.
+
+Tom Hamill, Feb 2022
+
+"""
+
+import os, sys
+from datetime import datetime
+import numpy as np
+import _pickle as cPickle
+from netCDF4 import Dataset
+import scipy.stats as stats
+import pygrib
+from netCDF4 import Dataset
+from dateutils import hrs_since_day1CE_todate, \
+    dateto_hrs_since_day1CE, hrstodate, datetohrs, dateshift
+from mpl_toolkits.basemap import Basemap, interp
+
+# --------------------------------------------------------------
+
+def get_julday_character(julday):
+    if julday < 10:
+        cjulday = '00'+str(julday)
+    elif julday >= 10 and julday < 100:
+        cjulday = '0'+str(julday)
+    else:
+        cjulday = str(julday)
+    return cjulday
+
+# --------------------------------------------------------------
+
+
+# ---- get the month and end time from the commmand line
+
+daysomo = [31, 28, 31,  30, 31, 30,  31, 31, 30,  31, 30, 31]
+daysomo_leap = [31, 29, 31,  30, 31, 30,  31, 31, 30,  31, 30, 31]
+day1900 = datetime(1900,1,1,0)
+hours1900 = dateto_hrs_since_day1CE(day1900, mixedcal=True)
+
+# ---- get the lat/lons of the output NDFD CONUS grid.   These are
+#      oriented S to N as interp requires
+
+infile = '/Volumes/Backup Plus/blend_domains/blend.t00z.qmd.f001.co.grib2'
+print (infile)
+flatlon = pygrib.open(infile)
+fcst = flatlon.select()[0]
+lats_ndfd, lons_ndfd = fcst.latlons()
+nlats_ndfd, nlons_ndfd = np.shape(lons_ndfd)
+flatlon.close()
+print ('min, max lons_ndfd = ', np.min(lons_ndfd), np.max(lons_ndfd))
+lons_ndfd = lons_ndfd + 360.  # convert to deg E.    
+#zeros = np.zeros((nlats_ndfd, nlons_ndfd), dtype=np.float32)
+       
+# ---- process all years for this month
+
+cyears = ['2020', '2020', '2020', '2020', \
+    '2020', '2020', '2020', '2020', \
+    '2020', '2020', '2020', '2020', \
+    '2021', '2021', '2021', '2021', \
+    '2021', '2021', '2021', '2021', \
+    '2021', '2021', '2021', '2021', '2022']
+    
+#cyears = ['2021', '2021', '2021', \
+#    '2021', '2021', '2021', '2021', \
+#    '2021', '2021', '2021', '2021', '2022']
+cmonths = ['01', '02','03','04','05','06','07','08','09','10','11','12',\
+    '01', '02','03','04','05','06','07','08','09','10','11','12', '01']
+    
+cmonths_next = ['02','03','04','05','06','07','08','09','10','11','12',\
+    '01', '02','03','04','05','06','07','08','09','10','11','12', '01','02']
+
+#cmonths = ['01', '02','03','04','05','06','07','08','09','10','11','12', '01']
+
+for cyear, cmonth in zip(cyears, cmonths):
+    
+    iyear = int(cyear)
+    imonth = int(cmonth)-1
+    print ('****** processing year month = ', cyear, cmonth)
+    # ---- determine the days of the month
+    if iyear%4 == 0:
+        ndays = daysomo_leap[imonth]
+    else:
+        ndays = daysomo[imonth]
+    
+    # ---- read a test date and convert to current year/month/day/hour
+
+    infile = '/Volumes/NBM/mswep_early2020/NRT/3hourly/2020001.03.nc'
+    print ('  reading from ',infile)
+    ncin = Dataset(infile)
+    #time = nc.variables['time'][:]  # time, after conversion, is start of 3-h period
+    if iyear == 2020:
+        lons_mswep = ncin.variables['lon'][:]
+        print ('lons_mswep = ', lons_mswep)
+        nlons_mswep = len(lons_mswep)
+        lats_mswep = ncin.variables['lat'][:]
+        nlats_mswep = len(lats_mswep)
+        zeros = np.zeros((nlats_mswep, nlons_mswep), dtype=np.float32)
+        if lats_mswep[0] > lats_mswep[-1]: # not oriented S to N so flip
+            flipud = True
+            lats_mswep = np.flipud(lats_mswep)
+        lons_mswep = lons_mswep + 360. 
+        #print ('lons_mswep = ', lons_mswep)   
+        #sys.exit()
+
+    # ---- open netCDF output file and deal with all the variable definition and 
+    #      such.
+     
+    outfile = '/Volumes/NBM/mswep/'+cyear+cmonth+'_on_ndfd_grid_6hourly.nc'
+    print ('   writing to ',outfile)
+    ncout = Dataset(outfile,'w',format='NETCDF4_CLASSIC')
+
+    xf = ncout.createDimension('xf',nlons_ndfd)
+    xvf = ncout.createVariable('xf','f4',('xf',))
+    xvf.long_name = "eastward grid point number on NDFD grid"
+    xvf.units = "n/a"
+
+    yf = ncout.createDimension('yf',nlats_ndfd)
+    yvf = ncout.createVariable('yf','f4',('yf',))
+    yvf.long_name = "northward grid point number on 1/4-degree lat-lon grid"
+    yvf.units = "n/a"
+
+    time = ncout.createDimension('time',None)
+    timev = ncout.createVariable('time','f4',('time',))
+    timev.units = "index to time dimension, that's all"
+
+    lonsa = ncout.createVariable('lons','f4',('yf','xf',))
+    lonsa.long_name = "longitude"
+    lonsa.units = "degrees_east"
+
+    latsa = ncout.createVariable('lats','f4',('yf','xf',))
+    latsa.long_name = "latitude"
+    latsa.units = "degrees_north"
+
+    yyyymmddhh_begin = ncout.createVariable('yyyymmddhh_begin','i4',('time',))
+    yyyymmddhh_begin.longname = \
+        "Precip accumulation period beginning in yyyymmddhh format"
+
+    yyyymmddhh_end = ncout.createVariable('yyyymmddhh_end','i4',('time',))
+    yyyymmddhh_end.longname = \
+        "Precip accumulation period ending in yyyymmddhh format"
+
+    # --- declare the single-level variable information on lat-lon grid
+
+    apcp_anal = ncout.createVariable('apcp_anal','f4',('time','yf','xf',),
+        zlib=True,least_significant_digit=2)
+    apcp_anal.units = "mm"
+    apcp_anal.long_name = \
+        "Interpolated 6-h accumulated MSWEP analysis on CONUS NDFD grid"
+    apcp_anal.valid_range = [0.,1000.]
+    apcp_anal.missing_value = np.array(-9999.99,dtype=np.float32)
+
+    # ---- initialize
+
+    xvf[:] = np.arange(nlons_ndfd)
+    yvf[:] = np.arange(nlats_ndfd)
+    lonsa[:] = lons_ndfd[:,:]
+    latsa[:] = lats_ndfd[:,:]
+
+    # ---- metadata
+
+    ncout.title = "NDFD CONUS domain interpolated from MSWEP, 6 hourly accum."
+    ncout.history = "Interpolated from MSWEP_V260 0.1 deg data Dec 2020 by Tom Hamill"
+    ncout.institution =  "gloh2o.org"
+    ncout.platform = "Precipitation analysis"
+    ncout.references = "http://gloh2o.org/"
+
+    # ---- loop thru all dates, read reforecasts, and munge them into netCDF...
+
+    #mswep_directory = '/Volumes/NBM/mswep_early2020/'
+    mswep_directory = '/Volumes/NBM/mswep_early2020/NRT/3hourly/'
+    ktr = 0
+    for iday in range(ndays):
+        
+        # --- convert this day of month to a 2-digit character.
+        
+        if iday+1 < 10:
+            cday = '0'+str(iday+1)
+        elif iday+1 >=10 and iday+1 < 100:
+            cday = str(iday+1)        
+
+        # --- loop over the 6-h periods we wish to accumulate
+        
+        for chour in ['00','06','12','18']:
+            
+            cyyyymmddhh_late = cyear+cmonth+cday+chour
+            print (cyyyymmddhh_late, cyear, cmonth, cday, chour)
+            cyyyymmddhh_early = dateshift(cyyyymmddhh_late, -3) 
+            cyyyymmddhh_begin = dateshift(cyyyymmddhh_early, -3) 
+            cyyyymmddhh_end = cyyyymmddhh_late
+            cyear_early = cyyyymmddhh_early[0:4]
+            cmonth_early = cyyyymmddhh_early[4:6]
+            cday_early = cyyyymmddhh_early[6:8]
+            chour_early = cyyyymmddhh_early[8:10]
+            
+            # ---- get early julian date
+            
+            fmt = '%Y.%m.%d' 
+            date_early = cyear_early + '.' + cmonth_early + '.'+cday_early
+            dt_early = datetime.strptime(date_early, fmt)
+            tt = dt_early.timetuple()
+            julday_early = tt.tm_yday
+            cjulday_early = get_julday_character(julday_early)
+            
+            # ---- get late julian date, shifting by 
+            
+            date_late = cyyyymmddhh_late[0:4] + '.' + \
+                cyyyymmddhh_late[4:6] + '.'+cyyyymmddhh_late[6:8]
+            dt_late = datetime.strptime(date_late, fmt)
+            tt = dt_late.timetuple()
+            julday_late = tt.tm_yday
+            cjulday_late = get_julday_character(julday_late)
+            cyear_late = cyyyymmddhh_late[0:4]
+            cmonth_late = cyyyymmddhh_late[4:6]
+            cday_late = cyyyymmddhh_late[6:8]
+            chour_late = cyyyymmddhh_late[8:10]
+            
+            #print (cday, cdayplus, cmonth_begin, cmonth_end)    
+            infile1 = mswep_directory + cyear_late  + cjulday_late +'.'+chour_late+'.nc'
+            infile2 = mswep_directory + cyear_early + cjulday_early +'.'+chour_early+'.nc'
+                
+            print ('==== ', cyear, cmonth, cday, chour)
+            print ('     ', cjulday_early, cjulday_late)
+            print ('     ', cyyyymmddhh_begin, cyyyymmddhh_end)
+            print ('     ', infile1)
+            print ('     ', infile2)
+            
+            # --- read the two 3-hourly netCDF slices. Make sure none subzero.
+         
+            ncin = Dataset(infile1,'r')
+            precip_first = ncin.variables['precipitation'][0,:,:]
+            if iday == 0:
+                zeros = 0.0*np.copy(precip_first)
+            ncin.close()
+            
+            ncin = Dataset(infile2,'r')
+            precip_second = ncin.variables['precipitation'][0,:,:]
+            ncin.close()
+            
+            precip_mswep = precip_first + precip_second
+            precip_mswep = np.where(precip_mswep < 0.0, zeros, precip_mswep)
+            if flipud == True:
+                precip_mswep = np.flipud(precip_mswep)
+        
+            # ---- bilinear interpolate to the NDFD grid
+        
+            precip_ndfd = interp(precip_mswep, lons_mswep, lats_mswep, \
+                lons_ndfd, lats_ndfd, checkbounds=False, masked=False, order=3)
+                    
+            #  ---- save to netCDF file.
+
+            yyyymmddhh_begin[ktr]  = int(cyyyymmddhh_begin)
+            yyyymmddhh_end[ktr]    = int(cyyyymmddhh_end)
+            print ('max(precip_ndfd) = ', np.max(precip_ndfd))
+            apcp_anal[ktr]         = precip_ndfd
+            ktr = ktr + 1
+            
+            
+    ncout.close()
+
+
+
+
+
+
